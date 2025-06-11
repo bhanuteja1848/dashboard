@@ -8,8 +8,8 @@ import io
 @st.cache_data
 def load_data():
     # Load both datasets
-    wanderdoll_df = pd.read_csv("wanderdoll_cleaned.csv")
-    oddmuse_df = pd.read_csv("odd_muse_cleaned.csv")  # Add your Odd Muse file
+    wanderdoll_df = pd.read_csv("wanderdoll_rating.csv")
+    oddmuse_df = pd.read_csv("oddmuse_rating.csv")  # Add your Odd Muse file
     
     # Add brand column to each dataset
     wanderdoll_df["brand"] = "Wanderdoll"
