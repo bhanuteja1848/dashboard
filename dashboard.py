@@ -79,7 +79,7 @@ total_reviews = len(df) if brand_options == "All Brands" else len(df[df["brand"]
 st.info(f"📊 **{brand_text}**: {total_reviews} reviews from {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
 
 # Create tabs
-tab1, tab2 = st.tabs(["📊 Dashboard", "📋 Data"])
+tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📋 Data", "🔄 Brand Comparison"])
 
 # Date range filter
 min_date = df["date"].min()
@@ -111,13 +111,21 @@ else:  # Custom
         max_value=max_date
     )
 
-# Rating filter - Fixed to use integers instead of floats
-rating_options = st.sidebar.multiselect(
-    "⭐ Select Ratings",
-    options=[1, 2, 3, 4, 5],  # Changed from floats to integers
-    default=[1, 2, 3, 4, 5],
-    format_func=lambda x: f"{x} Star{'s' if x != 1 else ''}"
-)
+# Rating filter - Checkbox approach
+st.sidebar.subheader("⭐ Select Ratings")
+col1, col2 = st.sidebar.columns(2)
+
+rating_options = []
+with col1:
+    if st.checkbox("1 Star", value=True): rating_options.append(1)
+    if st.checkbox("2 Stars", value=True): rating_options.append(2)
+    if st.checkbox("3 Stars", value=True): rating_options.append(3)
+with col2:
+    if st.checkbox("4 Stars", value=True): rating_options.append(4)
+    if st.checkbox("5 Stars", value=True): rating_options.append(5)
+
+if len(rating_options) == 5:
+    st.sidebar.caption("✅ All ratings selected")
 
 # Category filter
 st.sidebar.subheader("🏷️ Filter by Categories")
@@ -256,40 +264,46 @@ with tab1:
             category_df = pd.DataFrame(category_data)
             st.dataframe(category_df, use_container_width=True)
         
-        # Positive vs Negative Reviews Timeline
-        st.subheader("📈 Positive vs Negative Reviews Over Time")
+        # Positive vs Negative Reviews Timeline - Monthly view
+        st.subheader("📈 Monthly Sentiment Trends")
 
-        # Create sentiment categories
-        filtered_df_timeline = filtered_df.copy()
-        filtered_df_timeline['sentiment'] = filtered_df_timeline['rating'].apply(
-            lambda x: 'Positive (4-5★)' if x >= 4 else 'Negative (1-2★)' if x <= 2 else 'Neutral (3★)'
-        )
-
-        # Group by date and sentiment
-        timeline_df = filtered_df_timeline.groupby([filtered_df_timeline['date'].dt.date, 'sentiment']).size().reset_index()
-        timeline_df.columns = ['Date', 'Sentiment', 'Count']
-
-        if len(timeline_df) > 0:
-            fig_timeline = px.line(
-                timeline_df,
-                x='Date',
-                y='Count',
-                color='Sentiment',
-                title='Sentiment Trends Over Time',
-                markers=True,
-                color_discrete_map={
-                    'Positive (4-5★)': '#22c55e',
-                    'Negative (1-2★)': '#ef4444', 
-                    'Neutral (3★)': '#fbbf24'
-                }
+        if not filtered_df.empty:
+            # Create sentiment categories
+            timeline_data = filtered_df.copy()
+            timeline_data['sentiment'] = timeline_data['rating'].apply(
+                lambda x: 'Positive (4-5★)' if x >= 4 else 'Negative (1-2★)' if x <= 2 else 'Neutral (3★)'
             )
-            fig_timeline.update_layout(
-                hovermode='x unified',
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
-            )
-            st.plotly_chart(fig_timeline, use_container_width=True)
+
+            # Group by month and sentiment
+            timeline_data['month'] = timeline_data['date'].dt.to_period('M')
+            timeline_df = timeline_data.groupby(['month', 'sentiment']).size().reset_index()
+            timeline_df.columns = ['Month', 'Sentiment', 'Count']
+            timeline_df['Month'] = timeline_df['Month'].dt.to_timestamp()
+
+            if len(timeline_df) > 0:
+                fig_timeline = px.line(
+                    timeline_df,
+                    x='Month',
+                    y='Count',
+                    color='Sentiment',
+                    title='Monthly Sentiment Trends',
+                    markers=True,
+                    line_shape='spline',
+                    color_discrete_map={
+                        'Positive (4-5★)': '#22c55e',
+                        'Negative (1-2★)': '#ef4444', 
+                        'Neutral (3★)': '#fbbf24'
+                    }
+                )
+                fig_timeline.update_layout(
+                    hovermode='x unified',
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+                )
+                st.plotly_chart(fig_timeline, use_container_width=True)
+            else:
+                st.info("📊 Not enough data points for timeline visualization.")
         else:
-            st.info("📊 Not enough data points for timeline visualization.")
+            st.info("📊 No data available for timeline visualization.")
     else:
         st.warning("⚠️ No reviews match the selected filters. Please adjust your criteria.")
 
@@ -303,7 +317,7 @@ with tab2:
     with col1:
         show_columns = st.multiselect(
             "📋 Select Columns to Display",
-            options=["brand", "customer name", "rating", "review", "date", "matched_keywords"],
+            options=["brand", "customer name", "rating", "review", "date", "link","matched_keywords"],
             default=["brand", "customer name", "rating", "date", "matched_keywords"]
         )
     
@@ -381,6 +395,106 @@ with tab2:
     
     else:
         st.warning("⚠️ No data to display. Please adjust your filters or select columns to show.")
+
+# Brand Comparison Tab
+with tab3:
+    st.header("🔄 Brand Comparison")
+    
+    # Get unique brands
+    available_brands = df["brand"].unique().tolist()
+    
+    if len(available_brands) < 2:
+        st.warning("⚠️ Need at least 2 brands for comparison. Currently have: " + ", ".join(available_brands))
+    else:
+        # Brand selection for comparison
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            brand1 = st.selectbox("Select First Brand", available_brands, key="brand1")
+        
+        with col2:
+            brand2 = st.selectbox("Select Second Brand", 
+                                [b for b in available_brands if b != brand1], key="brand2")
+        
+        if brand1 and brand2:
+            # Filter data for each brand
+            brand1_data = df[df["brand"] == brand1]
+            brand2_data = df[df["brand"] == brand2]
+            
+            # Comparison metrics
+            st.subheader("📊 Key Metrics Comparison")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(f"{brand1} Avg Rating", f"{brand1_data['rating'].mean():.1f}")
+                st.metric(f"{brand2} Avg Rating", f"{brand2_data['rating'].mean():.1f}")
+            
+            with col2:
+                st.metric(f"{brand1} Total Reviews", len(brand1_data))
+                st.metric(f"{brand2} Total Reviews", len(brand2_data))
+            
+            with col3:
+                brand1_positive = len(brand1_data[brand1_data["rating"] >= 4]) / len(brand1_data) * 100
+                brand2_positive = len(brand2_data[brand2_data["rating"] >= 4]) / len(brand2_data) * 100
+                st.metric(f"{brand1} Positive %", f"{brand1_positive:.1f}%")
+                st.metric(f"{brand2} Positive %", f"{brand2_positive:.1f}%")
+            
+            with col4:
+                brand1_negative = len(brand1_data[brand1_data["rating"] <= 2]) / len(brand1_data) * 100
+                brand2_negative = len(brand2_data[brand2_data["rating"] <= 2]) / len(brand2_data) * 100
+                st.metric(f"{brand1} Negative %", f"{brand1_negative:.1f}%")
+                st.metric(f"{brand2} Negative %", f"{brand2_negative:.1f}%")
+            
+            # Side-by-side rating distribution
+            st.subheader("⭐ Rating Distribution Comparison")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                brand1_ratings = brand1_data["rating"].value_counts().sort_index()
+                fig1 = px.bar(
+                    x=brand1_ratings.index,
+                    y=brand1_ratings.values,
+                    title=f"{brand1} Rating Distribution",
+                    labels={"x": "Rating", "y": "Count"},
+                    color_discrete_sequence=["#3b82f6"]
+                )
+                fig1.update_xaxes(tickmode='array', tickvals=[1, 2, 3, 4, 5])
+                st.plotly_chart(fig1, use_container_width=True)
+            
+            with col2:
+                brand2_ratings = brand2_data["rating"].value_counts().sort_index()
+                fig2 = px.bar(
+                    x=brand2_ratings.index,
+                    y=brand2_ratings.values,
+                    title=f"{brand2} Rating Distribution",
+                    labels={"x": "Rating", "y": "Count"},
+                    color_discrete_sequence=["#ef4444"]
+                )
+                fig2.update_xaxes(tickmode='array', tickvals=[1, 2, 3, 4, 5])
+                st.plotly_chart(fig2, use_container_width=True)
+            
+            # Category comparison
+            st.subheader("🏷️ Category Issues Comparison")
+            
+            comparison_data = []
+            for category, keywords in categories.items():
+                brand1_cat = filter_by_categories(brand1_data, [category])
+                brand2_cat = filter_by_categories(brand2_data, [category])
+                
+                comparison_data.append({
+                    "Category": category.replace("_", " ").title(),
+                    f"{brand1} Count": len(brand1_cat),
+                    f"{brand1} %": len(brand1_cat) / len(brand1_data) * 100 if len(brand1_data) > 0 else 0,
+                    f"{brand2} Count": len(brand2_cat),
+                    f"{brand2} %": len(brand2_cat) / len(brand2_data) * 100 if len(brand2_data) > 0 else 0,
+                })
+            
+            comparison_df = pd.DataFrame(comparison_data)
+            st.dataframe(comparison_df, use_container_width=True)
+
+
 
 # Sidebar info
 st.sidebar.markdown("---")
