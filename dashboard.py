@@ -5,11 +5,10 @@ from datetime import datetime, timedelta
 import io
 
 # Load dataset
-@st.cache_data
 def load_data():
     # Load both datasets
-    wanderdoll_df = pd.read_csv("wanderdoll_rating.csv")
-    oddmuse_df = pd.read_csv("oddmuse_rating.csv")  # Add your Odd Muse file
+    wanderdoll_df = pd.read_csv("C:\\Users\\tejab\\Desktop\\Trustpilot Project\\Clean Datasets\\wanderdoll_rating.csv")
+    oddmuse_df = pd.read_csv("C:\\Users\\tejab\\Desktop\\Trustpilot Project\\Clean Datasets\\oddmuse_rating.csv")  # Add your Odd Muse file
     
     # Add brand column to each dataset
     wanderdoll_df["brand"] = "Wanderdoll"
@@ -18,7 +17,13 @@ def load_data():
     # Combine datasets
     df = pd.concat([wanderdoll_df, oddmuse_df], ignore_index=True)
     df["date"] = pd.to_datetime(df["date"])
-    
+
+    # Add uploaded data if available
+    if 'uploaded_data' in st.session_state and st.session_state.uploaded_data:
+        uploaded_dfs = st.session_state.uploaded_data
+        for uploaded_df in uploaded_dfs:
+            df = pd.concat([df, uploaded_df], ignore_index=True)
+        
     # Check for duplicates and remove them
     original_count = len(df)
     df = df.drop_duplicates(subset=["brand", "customer name", "review", "rating", "date"], keep='first')
@@ -68,10 +73,10 @@ brand_options = st.sidebar.selectbox(
 
 # Dynamic title based on brand selection
 if brand_options == "All Brands":
-    st.title("Multi-Brand Review Analytics Dashboard")
+    st.title("Multi-Brand Review Analytics")
     brand_text = "All Brands"
 else:
-    st.title(f"{brand_options} Review Analytics Dashboard")
+    st.title(f"{brand_options} Review Analytics")
     brand_text = brand_options
 
 # Show total dataset info
@@ -79,7 +84,7 @@ total_reviews = len(df) if brand_options == "All Brands" else len(df[df["brand"]
 st.info(f"📊 **{brand_text}**: {total_reviews} reviews from {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
 
 # Create tabs
-tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📋 Data", "🔄 Brand Comparison"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "📋 Data", "🔄 Brand Comparison", "📤 Upload Data"])
 
 # Date range filter
 min_date = df["date"].min()
@@ -493,6 +498,46 @@ with tab3:
             
             comparison_df = pd.DataFrame(comparison_data)
             st.dataframe(comparison_df, use_container_width=True)
+    
+# Upload Data Tab
+with tab4:
+    st.header("📤 Upload New Brand Data")
+    
+    uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'])
+    
+    if uploaded_file is not None:
+        new_df = pd.read_csv(uploaded_file)
+        st.success(f"✅ File uploaded! Found {len(new_df)} rows")
+        st.dataframe(new_df.head())
+        
+        # Column mapping
+        col1, col2 = st.columns(2)
+        with col1:
+            rating_col = st.selectbox("Rating Column", [""] + list(new_df.columns))
+            review_col = st.selectbox("Review Column", [""] + list(new_df.columns))
+            date_col = st.selectbox("Date Column", [""] + list(new_df.columns))
+        
+        with col2:
+            customer_col = st.selectbox("Customer Column", ["Not Available"] + list(new_df.columns))
+            brand_name = st.text_input("Brand Name")
+        
+        if st.button("✅ Add to Dashboard"):
+            # Process data
+            mapped_df = pd.DataFrame()
+            mapped_df['rating'] = pd.to_numeric(new_df[rating_col])
+            mapped_df['review'] = new_df[review_col]
+            mapped_df['date'] = pd.to_datetime(new_df[date_col])
+            mapped_df['brand'] = brand_name
+            mapped_df['customer name'] = new_df[customer_col] if customer_col != "Not Available" else "Anonymous"
+            mapped_df['link'] = ""
+            
+            # Add to session state
+            if 'uploaded_data' not in st.session_state:
+                st.session_state.uploaded_data = []
+            st.session_state.uploaded_data.append(mapped_df)
+            
+            st.success(f"🎉 Added {len(mapped_df)} reviews for {brand_name}!")
+            st.rerun()  # This refreshes the entire app with new data
 
 
 
