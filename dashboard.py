@@ -7,8 +7,8 @@ import io
 # Load dataset
 def load_data():
     # Load both datasets
-    wanderdoll_df = pd.read_csv("C:\\Users\\tejab\\Desktop\\Trustpilot Project\\Clean Datasets\\wanderdoll_rating.csv")
-    oddmuse_df = pd.read_csv("C:\\Users\\tejab\\Desktop\\Trustpilot Project\\Clean Datasets\\oddmuse_rating.csv")  # Add your Odd Muse file
+    wanderdoll_df = pd.read_csv("wanderdoll_rating.csv")
+    oddmuse_df = pd.read_csv("oddmuse_rating.csv")  # Add your Odd Muse file
     
     # Add brand column to each dataset
     wanderdoll_df["brand"] = "Wanderdoll"
